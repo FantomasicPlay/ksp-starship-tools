@@ -17,10 +17,9 @@ part modules by name, so a different SEP or SLE build can break them.
 
 | Mod | Version |
 | --- | --- |
-| Kerbal Space Program | 1.12.5 |
 | kOS | 1.6.0.1 |
-| Starship Expansion Project (SEP) | 3.1.0.0 |
-| Starship Launch Expansion (SLE) | 0.6.0.0 |
+| Starship Expansion Project (SEP) | 3.3.0 |
+| Starship Launch Expansion (SLE) | 0.6.0 |
 | Trajectories | 2.4.5.4 |
 | MechJeb 2 | 2.14.3 |
 
