@@ -641,6 +641,12 @@ set ArmGripAngle to 5.
 // tower.ks дёргает toggle, когда у модуля есть событие "open arms", а после
 // смыкания оно как раз появляется.
 set ArmsCloseSent to false.
+// CatchPos присваивается только внутри LandingGuidance. Условие отправки
+// захвата её читает, а живёт оно в триггере по высоте - если триггер успеет
+// раньше первого вызова наведения, kOS упадёт на неопределённой переменной.
+// Нулевой вектор здесь даёт заведомо большой промах, то есть захват просто
+// не уйдёт этим кадром - безопасный отказ вместо аварии.
+set CatchPos to v(0,0,0).
 // Куда именно целиться внутри рук. Сток бил в точку со смещением 1.2 м
 // вдоль оси башни - по факту бустер садился на самый край палок.
 // CatchOffsetAlong - глубже В башню (плюс = дальше от края).
@@ -2895,9 +2901,13 @@ function Boostback {
         when Vessel(TargetOLM):loaded then {
             set TgtLandingzone to landingzone.
             if Vessel(TargetOLM):partsnamed("OLM.B2"):length > 0 set PadB to true.
-            if PadB set TheTowerHeadingVector to vxcl(Vessel(TargetOLM):up:vector, Vessel(TargetOLM):PARTSNAMED("PadB.Chopsticks")[0]:position - Vessel(TargetOLM):PARTSNAMED("OLIT.2")[0]:position).
+            if PadB set TheTowerHeadingVector to TowerHeadingFrom(Vessel(TargetOLM)).
             else set TheTowerHeadingVector to vxcl(Vessel(TargetOLM):up:vector, Vessel(TargetOLM):PARTSNAMED("SLE.SS.OLIT.MZ")[0]:position - Vessel(TargetOLM):PARTSTITLED("Starship Orbital Launch Integration Tower Base")[0]:position).
             //set TowerHeadDraw to vecDraw(BoosterCore:position,TowerHeadingVector,red,"Tower",2,true,0.2).
+            // Насколько новая опора (ориентация детали) разошлась со старой
+            // (разность позиций). Ожидаем около 4 гр на Pad B. Ноль означает,
+            // что facing совпал с позиционной опорой, 90 - что выбрана не та ось.
+            if PadB print "Tower hdg fix: " + round(vAng(TheTowerHeadingVector, vxcl(Vessel(TargetOLM):up:vector, TowerMZpart(Vessel(TargetOLM)):position - TowerBasePart(Vessel(TargetOLM)):position)), 2) + " deg".
             if vAng(TheTowerHeadingVector, Vessel(TargetOLM):north:vector) < 52 set TowerHeading to "North".
             else if vAng(TheTowerHeadingVector, Vessel(TargetOLM):north:vector) > 128 set TowerHeading to "South".
             else if vAng(TheTowerHeadingVector, vCrs(Vessel(TargetOLM):up:vector, Vessel(TargetOLM):north:vector)) < 42 set TowerHeading to "East".
@@ -3292,7 +3302,7 @@ function Boostback {
                 if Vessel(TargetOLM):partsnamed("OLM.B2"):length > 0 set PadB to true.
                 if PadB {
                     set MZHeight to vxcl(vCrs(north:vector, up:vector), vxcl(north:vector, landingzone:position - Vessel(TargetOLM):PARTSNAMED("PadB.Chopsticks")[0]:position)):mag.
-                    set TowerHeadingVector to vxcl(Vessel(TargetOLM):up:vector, Vessel(TargetOLM):PARTSNAMED("PadB.Chopsticks")[0]:position - Vessel(TargetOLM):PARTSNAMED("OLIT.2")[0]:position).
+                    set TowerHeadingVector to TowerHeadingFrom(Vessel(TargetOLM)).
                     if BoosterType:contains("Block3") {
                         if not RSS 
                             lock RadarAlt to vdot(up:vector, GridFins[0]:position - Vessel(TargetOLM):PARTSNAMED("PadB.Chopsticks")[0]:position) - LiftingPointToGridFinDist - 2.8.
@@ -3381,8 +3391,24 @@ function Boostback {
                             // скорости 6-13 м/с - и команда до башни не доходила.
                             // Этот же цикл исполняется гарантированно: он писал
                             // ArmA = 0.13 на RadarAlt = 1.
+                            // Промах меряем относительно CatchPos - той точки, куда
+                            // бустер реально летит, - и только БОКОВУЮ составляющую.
+                            //
+                            // Было: полное расстояние до landingzone. Это другая точка:
+                            // CatchPos смещён от неё офсетами (CatchOffsetAlong = 3 м)
+                            // и вкладом heading. В полёте 19:55 расстояние до landingzone
+                            // на подходе шло 8 -> 12 -> 15 м при пороге 4 м, то есть
+                            // условие не выполнялось НИ РАЗУ и CloseArms не уходил
+                            // (ArmsClosed = 0 весь лог, створ схлопывался стоковой
+                            // кривой вместо захвата).
+                            //
+                            // Вдоль оси промах не страшен - руки длинные, и Along там
+                            // держит стабильные -5 м как остаточная ошибка контура,
+                            // она не обнуляется в принципе. Страшен боковой: в том же
+                            // полёте Side был 0.79 / -0.86 / -1.62 / -0.74 м, то есть
+                            // проходит с запасом.
                             if RadarAlt < ArmCloseRatio * BoosterHeight
-                               and vxcl(up:vector, landingzone:position - BoosterCore:position):mag < ArmCloseMaxOffset {
+                               and abs(vdot(CatchPos - BoosterCore:position, vCrs(up:vector, TheTowerHeadingVector:normalized):normalized)) < ArmCloseMaxOffset {
                                 set ArmsCloseSent to true.
                                 sendMessage(Vessel(TargetOLM), ("MechazillaArms," + round(BoosterRot, 1) + "," + ArmSpeed + "," + ArmGripAngle + ",true")).
                                 sendMessage(Vessel(TargetOLM), ("CloseArms")).
@@ -4541,7 +4567,7 @@ function LogBoosterFlightData {
     // Заголовок пишем один раз, при первом вызове.
     if PrevLogTime = 0 {
         set PrevLogTime to time:seconds.
-        LOG "MET,Phase,RadarAlt,Alt,VSpd,Airspeed,DistToTgt_km,LngErr,LatErr,AoA,Throttle,Mass_t,SteerErr,RollErr,RollFrozen,TopVsUp,CmdTopVsUp,FlipCmd,EngAct,EngMask,LF,LFCutoff,EvMaxQ,EvSep,EvSeco,EvLand,LiftoffMass_t,LiftoffTWR,ArmAngle,ArmSpeed,BoosterRot,LandingBurnAlt,TotalstopDist,TargetMidShutdown,MidShutdownSpeed,ReqDecel,LandingRatio,RaptorkN,MaxDecel,MaxDecel5,GS,LngSet,LngCtrl,LatCtrl,LngMaxOut,TgtErr,NoseVsTgt,PredGS,TgtAlong,TgtSide,ArmsClosed,RotRate" to "0:/BoosterFlightData.csv".
+        LOG "MET,Phase,RadarAlt,Alt,VSpd,Airspeed,DistToTgt_km,LngErr,LatErr,AoA,Throttle,Mass_t,SteerErr,RollErr,RollFrozen,TopVsUp,CmdTopVsUp,FlipCmd,EngAct,EngMask,LF,LFCutoff,EvMaxQ,EvSep,EvSeco,EvLand,LiftoffMass_t,LiftoffTWR,ArmAngle,ArmSpeed,BoosterRot,LandingBurnAlt,TotalstopDist,TargetMidShutdown,MidShutdownSpeed,ReqDecel,LandingRatio,RaptorkN,MaxDecel,MaxDecel5,GS,LngSet,LngCtrl,LatCtrl,LngMaxOut,TgtErr,NoseVsTgt,PredGS,TgtAlong,TgtSide,ArmsClosed,RotRate,Scale,GlideD,BoostH,Ox,OxPct,HdgFix,HdgAz" to "0:/BoosterFlightData.csv".
         return.
     }
     // 0.5 c: флип длится ~9 c, посекундная запись его смазывает.
@@ -4665,6 +4691,32 @@ function LogBoosterFlightData {
     // упреждение защёлки: ноль здесь означает, что оно не считается.
     local rrate is 0.
     if defined RotRate set rrate to round(RotRate, 3).
+    // Конфигурация, выбранная при старте. Без неё по логу нельзя сказать, какая
+    // ветка планеты сработала, и приходится выводить масштаб косвенно.
+    local cfgScale is -1.
+    local cfgGlide is -1.
+    local cfgBH is -1.
+    local cfgOxPct is -1.
+    if defined Scale set cfgScale to round(Scale, 2).
+    if defined BoosterGlideDistance set cfgGlide to round(BoosterGlideDistance).
+    if defined BoosterHeight set cfgBH to round(BoosterHeight, 1).
+    if OxBoosterCap > 0 set cfgOxPct to round(100 * OxBooster / OxBoosterCap, 1).
+    // Куда реально смотрит опора башни (HdgAz, компасный азимут) и насколько
+    // она разошлась со старой позиционной опалой (HdgFix). Без этих двух чисел
+    // по логу нельзя сказать, применился фикс heading или нет: в самих углах
+    // поворота рук разница в 4 градуса неотличима от обычного доворота.
+    // Ожидаем HdgFix около 4.15. Ноль означает, что facing совпал с позиционной
+    // опорой, около 90 - что выбрана не та ось детали.
+    local hfix is -1.
+    local haz is -1.
+    if not (TargetOLM = "false") and Vessel(TargetOLM):loaded {
+        local hv is vxcl(up:vector, TowerHeadingVector).
+        if hv:mag > 0.1 {
+            set haz to round(mod(360 + arctan2(vdot(hv, vCrs(up:vector, north:vector)), vdot(hv, north:vector)), 360), 1).
+            local pref is vxcl(up:vector, TowerMZpart(Vessel(TargetOLM)):position - TowerBasePart(Vessel(TargetOLM)):position).
+            if pref:mag > 0.5 set hfix to round(vAng(hv, pref), 2).
+        }
+    }
     local tgal is -1.
     local tgsd is -1.
     if defined TargetError and defined TheTowerHeadingVector {
@@ -4723,7 +4775,14 @@ function LogBoosterFlightData {
         + "," + tgal
         + "," + tgsd
         + "," + armsCl
-        + "," + rrate) to "0:/BoosterFlightData.csv".
+        + "," + rrate
+        + "," + cfgScale
+        + "," + cfgGlide
+        + "," + cfgBH
+        + "," + round(OxBooster)
+        + "," + cfgOxPct
+        + "," + hfix
+        + "," + haz) to "0:/BoosterFlightData.csv".
 }
 
 
@@ -5244,6 +5303,50 @@ function TowerMountPart {
     return TowerVsl:PARTSTITLED("Starship Orbital Launch Mount")[0].
 }
 
+// Опорное направление башни (куда вылетают руки).
+//
+// Раньше бралась разность позиций: палочки минус основание башни. Плечо там
+// всего 7.8 м, а origin детали палочек смещён вбок примерно на 0.65 м - это
+// 4.15 гр систематического перекоса. Проверено на двух разных craft разных
+// людей, цифра совпала до третьего знака, значит это свойство самой детали,
+// а не кривая установка башни. Линия "башня - стол" на тех же craft даёт
+// 0.4-0.6 гр, то есть стол стоит ровно, а origin палочек - нет.
+//
+// Перекос уходил прямо в GetBoosterRotation (угол поворота рук) и в логах не
+// был виден вообще: CatchPos и TgtSide считаются в этой же системе координат,
+// контур замкнут сам на себя и невязку не показывает. Отсюда посадки на край
+// палочек, которые мы правили офсетами вслепую.
+//
+// Ориентация детали честная: её ось наклонена на 0.43 гр. Руки вращаются
+// анимацией костей (mech2.0left/right, ClawBone/MZBone), root-трансформ при
+// этом стоит - facing не поедет вслед за руками.
+//
+// Какая именно ось модели смотрит вдоль вылета рук, зависит от детали, поэтому
+// не угадываем: берём ту горизонтальную ось, что совпала с грубой опорой по
+// позициям. Грубая опора врёт на 4 гр, но сторону задаёт однозначно, а ошибиться
+// в выборе оси она не даёт - остальные кандидаты отстоят на 90 гр и больше.
+function TowerHeadingFrom {
+    parameter TowerVsl.
+    local mz is TowerMZpart(TowerVsl).
+    local u is TowerVsl:up:vector.
+    local ref is vxcl(u, mz:position - TowerBasePart(TowerVsl):position).
+    if ref:mag < 0.5 { return ref. }
+    local best is ref.
+    local bestDot is 0.
+    local axes is list(mz:facing:starvector, -mz:facing:starvector, mz:facing:topvector, -mz:facing:topvector, mz:facing:forevector, -mz:facing:forevector).
+    for v in axes {
+        local h is vxcl(u, v).
+        if h:mag > 0.3 {
+            local d is vdot(h:normalized, ref:normalized).
+            if d > bestDot {
+                set bestDot to d.
+                set best to h.
+            }
+        }
+    }
+    return best.
+}
+
 function TowerOnShip {
     // детали башни принадлежат нашему судну = мы пристыкованы к башне
     return ship:PARTSTITLED("Starship Orbital Launch Integration Tower Base"):length > 0 or ship:PARTSNAMED("OLIT.2"):length > 0.
@@ -5256,7 +5359,7 @@ function setTowerHeadingVector {
                 set ArmCenterVec to TowerMZpart(Vessel(TargetOLM)):position.
                 lock RollVector to vxcl(up:vector, ArmCenterVec - BoosterCore:position).
                 if Vessel(TargetOLM):distance < 2100 {
-                    if PadB set TowerHeadingVector to vxcl(Vessel(TargetOLM):up:vector, Vessel(TargetOLM):PARTSNAMED("PadB.Chopsticks")[0]:position - Vessel(TargetOLM):PARTSNAMED("OLIT.2")[0]:position).
+                    if PadB set TowerHeadingVector to TowerHeadingFrom(Vessel(TargetOLM)).
                     else set TowerHeadingVector to vxcl(Vessel(TargetOLM):up:vector, Vessel(TargetOLM):PARTSNAMED("SLE.SS.OLIT.MZ")[0]:position - Vessel(TargetOLM):PARTSTITLED("Starship Orbital Launch Integration Tower Base")[0]:position).
                 } else set TowerHeadingVector to angleAxis(-6,up:vector) * vCrs(up:vector, north:vector).
             } else {

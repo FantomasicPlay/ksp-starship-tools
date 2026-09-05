@@ -31,7 +31,7 @@
     position:absolute; left:0; right:0; bottom:0;
     height:calc(206px * var(--scale));
     display:grid; grid-template-columns:1fr auto 1fr; align-items:center;
-    padding:0 calc(110px * var(--scale)) calc(16px * var(--scale));
+    padding:0 calc(64px * var(--scale)) calc(16px * var(--scale));
     opacity:1; transition:opacity .4s;
   }
 
@@ -40,9 +40,9 @@
      чтобы не было жёсткой вертикальной границы у центра. */
   .plate{
     position:absolute; bottom:0; height:100%; pointer-events:none;
-    -webkit-mask-image:linear-gradient(to var(--fade), #000 60%, transparent 100%);
-            mask-image:linear-gradient(to var(--fade), #000 60%, transparent 100%);
-    width:min(calc(640px * var(--scale)), 34vw);
+    -webkit-mask-image:linear-gradient(to var(--fade), #000 80%, transparent 100%);
+            mask-image:linear-gradient(to var(--fade), #000 80%, transparent 100%);
+    width:min(calc(590px * var(--scale)), 33vw);
     background:rgba(3,7,12,.55);
   }
   /* Форму задаёт JS через clip-path: path() — polygon() не умеет скругления,
@@ -82,9 +82,15 @@
   }
 
   /* ---------------- круглый прибор ---------------- */
-  .gauge{ position:relative; width:calc(150px * var(--scale)); height:calc(150px * var(--scale)); }
-  /* Никакой подложки под приборы: в оригинале они лежат прямо на картинке,
-     а читаемость держится на тени текста и общей плите. */
+  .gauge{ position:relative; width:calc(140px * var(--scale)); height:calc(140px * var(--scale)); }
+  /* Под каждым прибором своя круглая подложка, чуть шире кольца - как на
+     реальной трансляции. Раньше её не было, приборы лежали прямо на картинке
+     и держались только на тени текста; на светлом небе кольцо терялось. */
+  .gauge::before, .engines::before{
+    content:""; position:absolute; inset:3%; border-radius:50%;
+    background:rgba(3,7,12,.14); pointer-events:none; z-index:0;
+  }
+  .gauge svg, .engines svg, .gauge .inner, .engimg, .engines img{ z-index:1; }
   /* Разрыв кольца строго внизу по центру: дуга 268 град -> разрыв 92 град,
      центр разрыва в 90 (низ), значит дуга стартует со 136. Отсюда поворот 136. */
   .gauge svg{ position:absolute; inset:0; width:100%; height:100%; transform:rotate(136deg);
@@ -111,7 +117,7 @@
   }
 
   /* ---------------- кольцо двигателей ---------------- */
-  .engines{ width:calc(150px * var(--scale)); height:calc(150px * var(--scale)); position:relative; }
+  .engines{ width:calc(140px * var(--scale)); height:calc(140px * var(--scale)); position:relative; }
   .engines svg{ position:absolute; inset:0; width:100%; height:100%;
                 filter:drop-shadow(0 2px 7px rgba(0,0,0,.9)); }
   .engines .rim{ fill:none; stroke:var(--faint); stroke-width:1.4; }
@@ -263,7 +269,7 @@
 </head>
 <body class="stale">
 
-<div id="nodata">нет данных от kos</div>
+<div id="nodata">NO DATA FROM KOS</div>
 <div id="jserr"></div>
 
 <div id="bar">
@@ -504,8 +510,15 @@ function applyLayout(mode){
 }
 
 // --------- масштаб полосы под ширину экрана ---------
+// Считаем от фактической ширины САМОЙ полосы, а не от окна. В игре это одно и
+// то же (полоса на всю ширину), но в песочнице панель отъедает слева 340 px:
+// от окна масштаб получался как для широкого экрана, полоса лезла в узкое место
+// и выглядела примерно на 20% крупнее, чем на самом деле. Стенд обязан
+// показывать те же пропорции, что и игра, иначе по нему нельзя судить о размере.
 function fitScale(){
-  const s = Math.max(.62, Math.min(1.5, window.innerWidth / 2560));
+  const bar = document.getElementById("bar");
+  const w = (bar && bar.clientWidth) || window.innerWidth;
+  const s = Math.max(.62, Math.min(1.5, w / 2560));
   document.documentElement.style.setProperty("--scale", s.toFixed(3));
 }
 addEventListener("resize", fitScale); fitScale();
@@ -542,7 +555,10 @@ function shapePlates(){
     if (!el) continue;
     const w = el.offsetWidth, h = el.offsetHeight;
     if (!w || !h) continue;
-    el.style.clipPath = `path("${trapezoid(w, h, w * 0.13, 22, mir)}")`;
+    // Скос внутреннего края: доля ширины плиты. 0.13 давал короткую крутую
+    // наклонную; тянем до 0.30 - сторона, идущая к центру, становится длиннее,
+    // а угол при верхней грани заметно тупее.
+    el.style.clipPath = `path("${trapezoid(w, h, w * 0.34, 22, mir)}")`;
   }
 }
 addEventListener("resize", shapePlates);
@@ -645,11 +661,11 @@ function setGauge(g, value, frac, digits, sweep){
   }
 }
 
-const gBspd = makeGauge($("b-spd"), "Speed", "км/ч");
-const gBalt = makeGauge($("b-alt"), "Altitude", "км");
-const gRspd = makeGauge($("r-spd"), "Speed", "км/ч");   // те же данные ускорителя,
-const gRalt = makeGauge($("r-alt"), "Altitude", "км");  // но в режиме до разделения
-const gSspd = makeGauge($("s-spd"), "Speed", "км/ч");
+const gBspd = makeGauge($("b-spd"), "Speed", "km/h");
+const gBalt = makeGauge($("b-alt"), "Altitude", "km");
+const gRspd = makeGauge($("r-spd"), "Speed", "km/h");   // те же данные ускорителя,
+const gRalt = makeGauge($("r-alt"), "Altitude", "km");  // но в режиме до разделения
+const gSspd = makeGauge($("s-spd"), "Speed", "km/h");
 const gSg   = makeGauge($("s-g"),   "G-Load", "g");
 
 // --------- кольца двигателей ---------
@@ -1086,7 +1102,7 @@ function curveForAlt(alt){
 // как только круг заметен, он обязан замкнуться внутри неё, иначе линия обрывается
 // в воздухе. Кубический член держит линию почти прямой у земли.
 function exitXFor(c){
-  const want = FREE_HALF * (1.35 - 0.47 * c) + HALF_W * 2.5 * Math.pow(1 - c, 3);
+  const want = FREE_HALF * (1.72 - 0.47 * c) + HALF_W * 2.5 * Math.pow(1 - c, 3);
   // Шире свободной зоны линию всё равно не нарисовать. Если точка ухода за кадр
   // оказалась за приборами, круг делаем круче, чтобы он успел уйти вниз внутри
   // зоны — иначе конец линии обрывается в воздухе. Только сужает, не расширяет.
@@ -1174,12 +1190,15 @@ let FREE_HALF = 0;                   // граница свободной зон
 // Ограничение берём из реального положения боковых панелей.
 function measureFree(){
   const box = $("arcwrap").getBoundingClientRect();
-  const L = document.querySelector(".side.left");
-  const R = document.querySelector(".side.right");
+  // Границу берём по САМИМ приборам (.stack), а не по грид-ячейке .side:
+  // ячейка занимает всю свободную половину и обрезала таймлайн задолго до
+  // приборов - линия выходила заметно короче, чем есть место.
+  const L = document.querySelector(".side.left .stack") || document.querySelector(".side.left");
+  const R = document.querySelector(".side.right .stack") || document.querySelector(".side.right");
   if (!L || !R || !box.width){ FREE_HALF = HALF_W * 0.62; return; }
   const lr = L.getBoundingClientRect(), rr = R.getBoundingClientRect();
   const lim = Math.min(CX - (lr.right - box.left), (rr.left - box.left) - CX) - 14;
-  FREE_HALF = Math.max(160, lim);
+  FREE_HALF = Math.max(160, lim * 0.72);
 }
 
 function visHalfFor(c){
@@ -1544,7 +1563,7 @@ function renderSafe(){
     const box = $("jserr");
     if (box){
       const stackLines = (e && e.stack || "").split(String.fromCharCode(10)).slice(0, 3).join(String.fromCharCode(10));
-      box.textContent = "ОШИБКА ОВЕРЛЕЯ: " + (e && e.message || e) + String.fromCharCode(10) + stackLines;
+      box.textContent = "OVERLAY ERROR: " + (e && e.message || e) + String.fromCharCode(10) + stackLines;
       box.style.display = "block";
     }
     renderSafe.warned = true;
@@ -1579,6 +1598,331 @@ function reconcileVisibility(){
 setInterval(reconcileVisibility, 1000);
 
 renderSafe();
+</script>
+
+<!-- ===================== ПЕСОЧНИЦА =====================
+     Включается ТОЛЬКО при открытии index.html?sandbox=1
+     В игре оверлей грузит index.html без параметров, и весь этот блок
+     не выполняется ни одной строкой. Точка входа - файл sandbox.html.
+     Панель пушит кадры в те же каналы B и S, что и WebView2, поэтому
+     проверяет ровно тот код, который работает в полёте.
+====================================================== -->
+<script>
+(function(){
+  if (!/[?&]sandbox(=|&|$)/.test(location.search)) return;
+
+  // ---- описание полей: [ключ, подпись, min, max, шаг] ----
+  //
+  // Разделено намеренно. NUM_* - то, что текущий UI действительно читает и
+  // показывает. DEAD_* - поля, которые kOS пишет в telemetry.json, но ни один
+  // элемент экрана их не выводит. Ползунок для такого поля выглядел бы рабочим
+  // и не менял бы ничего - поэтому они вынесены в отдельную секцию с пометкой.
+  // Проверять принадлежность так (из папки ui):
+  //   head -1583 index.html > /tmp/x && grep -c '\.thr\b' /tmp/x
+  var NUM_B = [
+    ["met","MET, с — часы в центре",0,900,0.1],
+    ["alt","Высота, м — прибор ALT и прогиб дуги",0,150000,10],
+    ["radar","Радиовысота, м",0,6000,1],
+    ["spd","Скорость, м/с — прибор SPD",0,3000,1],
+    ["vs","Верт. скорость, м/с",-900,900,1],
+    ["lfpct","Топливо, % — кольцо двигателей",0,100,0.1],
+    ["oxpct","Окислитель, % — кольцо двигателей",0,100,0.1],
+    ["engact","Двигателей активно — подсветка",0,33,1],
+    ["pitch","Тангаж — сфера положения",0,360,0.1],
+    ["lotwr","Стартовый TWR — прогноз вех",0,3,0.001]
+  ];
+  var NUM_S = [
+    ["met","MET, с",0,900,0.1],
+    ["alt","Высота, м — прибор ALT",0,250000,10],
+    ["spd","Скорость, м/с — прибор SPD",0,8000,1],
+    ["g","Перегрузка — прибор G",0,6,0.01],
+    ["pitch","Тангаж — сфера положения",0,360,0.1],
+    ["engsl","Двиг. атмосферных — кольцо",0,3,1],
+    ["engvac","Двиг. вакуумных — кольцо",0,6,1],
+    ["lfpct","Топливо, % — кольцо",0,100,0.1],
+    ["oxpct","Окислитель, % — кольцо",0,100,0.1]
+  ];
+  // Есть в телеметрии, но экран их не показывает. Крутить бессмысленно —
+  // держим для будущего UI (например, версии под Falcon 9).
+  var DEAD_B = [
+    ["thr","Тяга, %",0,100,1],
+    ["mass","Масса, т",0,1300,0.1],
+    ["gs","Гориз. скорость, м/с",0,1000,1],
+    ["roll","Крен",-180,180,0.1],
+    ["aoa","Угол атаки",0,180,0.1],
+    ["steerr","Ошибка наведения",0,180,0.1],
+    ["lngerr","Ошибка вдоль, м",-2000,2000,1],
+    ["laterr","Ошибка вбок, м",-2000,2000,1],
+    ["lba","Высота посад. ожога, м",0,8000,1],
+    ["ratio","Landing ratio",0,3,0.01],
+    ["arms","Створ рук",0,60,0.1],
+    ["mzrot","Поворот башни",-90,90,0.1],
+    ["lomass","Стартовая масса, т",0,1500,0.1]
+  ];
+  var DEAD_S = [
+    ["vs","Верт. скорость, м/с",-900,900,1],
+    ["ap","Апоцентр, м",0,300000,100],
+    ["pe","Перицентр, м",-100000,300000,100],
+    ["thr","Тяга, %",0,100,1],
+    ["mass","Масса, т",0,1500,0.1],
+    ["steerr","Ошибка наведения",0,180,0.1]
+  ];
+  // Вехи. -1 = события ещё НЕ было (веха не горит), число = MET факта.
+  var EV_B = [["evmaxq","Max Q — факт"],["evsep","Stage Sep — факт"],
+              ["evland","SH Landing — факт"],["evlandeta","SH Landing — прогноз"]];
+  var EV_S = [["evseco","SECO — факт"],["evsecoeta","SECO — прогноз"],
+              ["evshipland","Ship Landing — факт"],["evshiplandeta","Ship Landing — прогноз"]];
+
+  var PHASE_B = ["prelaunch","ascent","boostback","descent","landing","landed"];
+  var PHASE_S = ["Launch","Ascent","Coast","Entry","Landing","Landed"];
+
+  var setters = {b:{}, s:{}};
+  var st = {
+    b:{met:0,alt:0,radar:0,spd:0,vs:0,gs:0,thr:0,mass:1242.8,lfpct:100,oxpct:100,
+       engact:33,pitch:0,roll:0,aoa:0,steerr:0,lngerr:0,laterr:0,lba:1483,ratio:0,
+       arms:60,mzrot:0,lomass:1242.8,lotwr:1.55,phase:"prelaunch",b3:true,
+       evmaxq:-1,evsep:-1,evland:-1,evlandeta:-1,engmiss:0,enggeom:"",flipcmd:0,
+       go:{d:true,e:true,f:true,t:true,g:true,catch:true}},
+    s:{met:0,alt:0,spd:0,vs:0,ap:0,pe:0,thr:0,mass:167.97,lfpct:100,oxpct:100,g:1,
+       pitch:0,steerr:0,engsl:3,engvac:6,phase:"Launch",mission:"integrated flight test",
+       evseco:-1,evsecoeta:-1,evshipland:-1,evshiplandeta:-1}
+  };
+  function mask(n,total){
+    var k = Math.max(0, Math.min(total, Math.round(n)));
+    var out = "";
+    for (var i=0;i<total;i++) out += (i<k ? "1" : "0");
+    return out;
+  }
+
+  var css = document.createElement("style");
+  css.textContent =
+  "#sbx{position:fixed;left:0;top:0;bottom:0;width:340px;overflow-y:auto;z-index:99999;" +
+  "background:#11141a;color:#dfe6f2;font:12px/1.35 system-ui,Segoe UI,sans-serif;" +
+  "padding:10px 12px 40px;box-shadow:2px 0 14px #000a}" +
+  "#sbx h3{margin:14px 0 6px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;" +
+  "color:#7fd4ff;border-bottom:1px solid #2a3340;padding-bottom:4px}" +
+  "#sbx h3:first-child{margin-top:0}" +
+  "#sbx .row{margin:5px 0}" +
+  "#sbx .row label{display:block;color:#9fb0c6;margin-bottom:1px;overflow:hidden;" +
+  "text-overflow:ellipsis;white-space:nowrap}" +
+  "#sbx .row .g{display:grid;grid-template-columns:1fr 64px;gap:6px;align-items:center}" +
+  "#sbx input[type=range]{width:100%;accent-color:#4ea8ff;margin:0}" +
+  "#sbx input[type=number],#sbx select,#sbx input[type=text]{width:100%;background:#0b0e13;" +
+  "color:#dfe6f2;border:1px solid #2a3340;border-radius:3px;padding:2px 4px;font:11px system-ui}" +
+  "#sbx button{background:#1d2632;color:#dfe6f2;border:1px solid #33465c;border-radius:4px;" +
+  "padding:5px 8px;cursor:pointer;font:11px system-ui;margin:2px 3px 2px 0}" +
+  "#sbx button:hover{background:#28394d}" +
+  "#sbx .chk{display:inline-block;margin-right:10px;color:#9fb0c6}" +
+  "#sbx .hint{color:#6b7c92;font-size:11px;margin:4px 0 8px}" +
+  "body.sbx-on #bar{left:340px !important;width:calc(100% - 340px) !important}" +
+  "body.sbx-on #nodata{display:none !important}" +
+  // Фон только в песочнице: на чёрном не видно, что подложки полупрозрачные.
+  "body.sbx-on{background:linear-gradient(180deg,#0a4d8c 0%,#1276c4 45%,#2ea6e0 100%)}";
+  document.head.appendChild(css);
+  document.body.classList.add("sbx-on");
+
+  var box = document.createElement("div");
+  box.id = "sbx";
+  document.body.appendChild(box);
+
+  function head(t){ var e=document.createElement("h3"); e.textContent=t; box.appendChild(e); }
+  function raw(html){ var d=document.createElement("div"); d.innerHTML=html; box.appendChild(d); return d; }
+
+  function slider(side, key, label, mn, mx, sp){
+    var obj = st[side];
+    var row = document.createElement("div"); row.className = "row";
+    var l = document.createElement("label"); l.textContent = label; l.title = key;
+    var g = document.createElement("div"); g.className = "g";
+    var r = document.createElement("input"); r.type="range"; r.min=mn; r.max=mx; r.step=sp; r.value=obj[key];
+    var n = document.createElement("input"); n.type="number"; n.min=mn; n.max=mx; n.step=sp; n.value=obj[key];
+    function set(v){ obj[key] = parseFloat(v); r.value = v; n.value = v; }
+    r.oninput = function(){ set(r.value); };
+    n.oninput = function(){ set(n.value); };
+    g.appendChild(r); g.appendChild(n);
+    row.appendChild(l); row.appendChild(g);
+    box.appendChild(row);
+    setters[side][key] = set;
+  }
+
+  head("Сценарий");
+  raw('<div class="hint">Гонит MET и зажигает вехи по расписанию. Логика вех зависит ' +
+      'от последовательности во времени — одиночным кадром её не проверить.</div>');
+  raw('<button id="sbxPlay">Проиграть</button>' +
+      '<button id="sbxStop">Стоп</button>' +
+      '<button id="sbxReset">Сброс</button>' +
+      '<span class="chk">скорость x<input type="number" id="sbxRate" value="4" ' +
+      'min="0.25" max="20" step="0.25" style="width:52px"></span>');
+
+  head("Пресеты");
+  raw('<div class="hint">Мгновенно ставит связный набор значений для момента полёта.</div>');
+  var presets = [
+    ["На столе",    {met:0,alt:0,radar:0,spd:0,vs:0,thr:0,engact:0,phase:"prelaunch",lfpct:100,evmaxq:-1,evsep:-1,evland:-1}],
+    ["Разгон",      {met:40,alt:22000,radar:22000,spd:900,vs:400,thr:100,engact:33,phase:"ascent",lfpct:52}],
+    ["Max Q",       {met:48,alt:26000,spd:1100,vs:430,evmaxq:47.7}],
+    ["Сепарация",   {met:111,alt:35000,spd:1050,vs:610,engact:13,phase:"boostback",evsep:111,lfpct:34}],
+    ["Снижение",    {met:250,alt:55000,radar:55000,spd:500,vs:-450,thr:0,engact:0,phase:"descent",lfpct:17}],
+    ["Посад. ожог", {met:325,alt:3000,radar:3000,spd:290,vs:-280,thr:45,engact:13,phase:"landing",lfpct:8,arms:20}],
+    ["Пойман",      {met:346,alt:86,radar:48,spd:0.6,vs:0,thr:0,engact:0,phase:"landed",evland:345.5,arms:5,lfpct:3}]
+  ];
+  var pbox = document.createElement("div");
+  presets.forEach(function(p){
+    var b = document.createElement("button");
+    b.textContent = p[0];
+    b.onclick = function(){ applyB(p[1]); };
+    pbox.appendChild(b);
+  });
+  box.appendChild(pbox);
+
+  head("Бустер — фаза");
+  raw('<div class="row"><select id="sbxPhaseB">' +
+      PHASE_B.map(function(p){ return '<option>'+p+'</option>'; }).join("") + '</select></div>');
+
+  head("Бустер — числа");
+  NUM_B.forEach(function(f){ slider("b", f[0], f[1], f[2], f[3], f[4]); });
+
+  head("Бустер — вехи");
+  raw('<div class="hint">−1 = события ещё не было, веха не должна гореть. ' +
+      'Число = MET, когда оно случилось.</div>');
+  EV_B.forEach(function(f){ slider("b", f[0], f[1], -1, 900, 0.1); });
+
+  head("Корабль — фаза и миссия");
+  raw('<div class="row"><select id="sbxPhaseS">' +
+      PHASE_S.map(function(p){ return '<option>'+p+'</option>'; }).join("") + '</select></div>' +
+      '<div class="row"><input type="text" id="sbxMission" value="' + st.s.mission + '"></div>');
+
+  head("Корабль — числа");
+  NUM_S.forEach(function(f){ slider("s", f[0], f[1], f[2], f[3], f[4]); });
+
+  head("Корабль — вехи");
+  EV_S.forEach(function(f){ slider("s", f[0], f[1], -1, 900, 0.1); });
+
+  head("Экран это не показывает");
+  raw('<div class="hint">Эти поля kOS пишет в telemetry.json, но ни один элемент ' +
+      'экрана их не выводит — крутить бессмысленно, картинка не изменится. ' +
+      'Держим на виду, чтобы было ясно, что уже есть в данных: пригодится, когда ' +
+      'появится UI под Falcon 9. Сюда же относится go (Go/NoGo) — он есть в ' +
+      'телеметрии и в CPU-меню, но не на полосе.</div>');
+  var deadOpen = false;
+  var deadBtn = document.createElement("button");
+  deadBtn.textContent = "Показать (" + (DEAD_B.length + DEAD_S.length) + ")";
+  var deadBox = document.createElement("div");
+  deadBox.style.display = "none";
+  box.appendChild(deadBtn);
+  box.appendChild(deadBox);
+  deadBtn.onclick = function(){
+    deadOpen = !deadOpen;
+    deadBox.style.display = deadOpen ? "" : "none";
+    deadBtn.textContent = (deadOpen ? "Скрыть" : "Показать") +
+                          " (" + (DEAD_B.length + DEAD_S.length) + ")";
+  };
+  (function(){
+    var save = box;
+    box = deadBox;
+    head("Бустер — не на экране");
+    DEAD_B.forEach(function(f){ slider("b", f[0], f[1], f[2], f[3], f[4]); });
+    head("Корабль — не на экране");
+    DEAD_S.forEach(function(f){ slider("s", f[0], f[1], f[2], f[3], f[4]); });
+    box = save;
+  })();
+
+  document.getElementById("sbxPhaseB").onchange = function(e){ st.b.phase = e.target.value; };
+  document.getElementById("sbxPhaseS").onchange = function(e){ st.s.phase = e.target.value; };
+  document.getElementById("sbxMission").oninput = function(e){ st.s.mission = e.target.value; };
+
+  function applyB(patch){
+    Object.keys(patch).forEach(function(k){
+      st.b[k] = patch[k];
+      if (setters.b[k]) setters.b[k](patch[k]);
+    });
+    if (patch.phase) document.getElementById("sbxPhaseB").value = patch.phase;
+  }
+  function applyS(patch){
+    Object.keys(patch).forEach(function(k){
+      st.s[k] = patch[k];
+      if (setters.s[k]) setters.s[k](patch[k]);
+    });
+    if (patch.phase) document.getElementById("sbxPhaseS").value = patch.phase;
+  }
+
+  // Опорные точки взяты из настоящих логов, чтобы числа были правдоподобны.
+  var KF_B = [
+    {t:0,   alt:0,     spd:0,    vs:0,    thr:100, eng:33, ph:"ascent",    lf:100},
+    {t:48,  alt:26000, spd:1100, vs:430,  thr:100, eng:33, ph:"ascent",    lf:52},
+    {t:111, alt:35000, spd:1050, vs:610,  thr:92,  eng:13, ph:"boostback", lf:34},
+    {t:150, alt:54000, spd:520,  vs:465,  thr:0,   eng:0,  ph:"descent",   lf:22},
+    {t:200, alt:65800, spd:236,  vs:0,    thr:0,   eng:0,  ph:"descent",   lf:22},
+    {t:280, alt:34000, spd:790,  vs:-757, thr:0,   eng:0,  ph:"descent",   lf:17},
+    {t:320, alt:5400,  spd:540,  vs:-521, thr:100, eng:13, ph:"landing",   lf:16},
+    {t:340, alt:900,   spd:116,  vs:-115, thr:40,  eng:13, ph:"landing",   lf:5},
+    {t:346, alt:86,    spd:0.6,  vs:0,    thr:0,   eng:0,  ph:"landed",    lf:3}
+  ];
+  var KF_S = [
+    {t:0,   alt:0,      spd:0,    ap:0,      pe:-600000, thr:100, eng:6, ph:"Launch"},
+    {t:111, alt:35000,  spd:1050, ap:60000,  pe:-500000, thr:100, eng:6, ph:"Ascent"},
+    {t:300, alt:110000, spd:3100, ap:120000, pe:-20000,  thr:100, eng:6, ph:"Ascent"},
+    {t:376, alt:123457, spd:3592, ap:127214, pe:123320,  thr:0,   eng:0, ph:"Coast"},
+    {t:700, alt:60000,  spd:2000, ap:120000, pe:-50000,  thr:0,   eng:0, ph:"Entry"},
+    {t:719, alt:0,      spd:2,    ap:0,      pe:-600000, thr:0,   eng:0, ph:"Landed"}
+  ];
+  function at(kf, t, key){
+    if (t <= kf[0].t) return kf[0][key];
+    for (var i=1;i<kf.length;i++){
+      if (t <= kf[i].t){
+        var a=kf[i-1], b=kf[i];
+        if (typeof a[key] !== "number") return b[key];
+        var k=(t-a.t)/(b.t-a.t);
+        return a[key] + (b[key]-a[key])*k;
+      }
+    }
+    return kf[kf.length-1][key];
+  }
+
+  var playing=false, tSim=0, tLast=0;
+  document.getElementById("sbxPlay").onclick  = function(){ playing=true; tLast=performance.now(); };
+  document.getElementById("sbxStop").onclick  = function(){ playing=false; };
+  document.getElementById("sbxReset").onclick = function(){
+    playing=false; tSim=0;
+    applyB({met:0,evmaxq:-1,evsep:-1,evland:-1,evlandeta:-1});
+    applyS({met:0,evseco:-1,evsecoeta:-1,evshipland:-1,evshiplandeta:-1});
+  };
+
+  function step(){
+    if (!playing) return;
+    var now = performance.now();
+    var rate = parseFloat(document.getElementById("sbxRate").value) || 1;
+    tSim += (now - tLast)/1000 * rate;
+    tLast = now;
+    if (tSim > 760){ playing = false; return; }
+    applyB({met:+tSim.toFixed(1),
+            alt:Math.round(at(KF_B,tSim,"alt")), radar:Math.round(at(KF_B,tSim,"alt")),
+            spd:Math.round(at(KF_B,tSim,"spd")), vs:Math.round(at(KF_B,tSim,"vs")),
+            thr:Math.round(at(KF_B,tSim,"thr")), engact:Math.round(at(KF_B,tSim,"eng")),
+            lfpct:+at(KF_B,tSim,"lf").toFixed(1), phase:at(KF_B,tSim,"ph")});
+    applyS({met:+tSim.toFixed(1),
+            alt:Math.round(at(KF_S,tSim,"alt")), spd:Math.round(at(KF_S,tSim,"spd")),
+            ap:Math.round(at(KF_S,tSim,"ap")), pe:Math.round(at(KF_S,tSim,"pe")),
+            thr:Math.round(at(KF_S,tSim,"thr")), engvac:Math.round(at(KF_S,tSim,"eng")),
+            phase:at(KF_S,tSim,"ph")});
+    if (tSim >= 47.7  && st.b.evmaxq     < 0) applyB({evmaxq:47.7});
+    if (tSim >= 111   && st.b.evsep      < 0) applyB({evsep:111});
+    if (tSim >= 345.5 && st.b.evland     < 0) applyB({evland:345.5});
+    if (tSim >= 375.4 && st.s.evseco     < 0) applyS({evseco:375.4});
+    if (tSim >= 719   && st.s.evshipland < 0) applyS({evshipland:719});
+  }
+
+  // Кадры уходят в те же каналы B и S, что и сообщения от WebView2.
+  // fresh() гасит канал через 2.5 с без новых кадров, поэтому шлём постоянно.
+  setInterval(function(){
+    step();
+    var b = {}, s = {};
+    Object.keys(st.b).forEach(function(k){ b[k] = st.b[k]; });
+    Object.keys(st.s).forEach(function(k){ s[k] = st.s[k]; });
+    b.engmask = mask(b.engact, 33);
+    s.engmask = mask(s.engvac, 6);
+    push(B, b);
+    push(S, s);
+  }, 100);
+})();
 </script>
 </body>
 </html>
