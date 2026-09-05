@@ -344,6 +344,12 @@ const LAYOUT = {
 const SHOW_AT = -5;                                     // с, за сколько до старта выезжают приборы
 const ENG_REVEAL_AT = 5000;                             // м радиовысоты, ускоритель
 const SHIP_ENG_AT   = 10000;                            // м, корабль — двигатели на посадке
+// Полная шкала приборов корабля — по факту SECO из ShipFlightData.csv
+// (05.09.2026): Alt 123460 м, Airspeed 3593 м/с = 12934.8 км/ч. Выше этих
+// значений скорость/высота ещё растут, но кольцо стоит полным — по просьбе
+// не сделано растяжимым, чтобы не мельчить полезный диапазон разгона.
+const SHIP_SPD_FULL_KMH = 12900;                        // км/ч, полное кольцо скорости
+const SHIP_ALT_FULL_KM  = 125;                          // км, полное кольцо высоты
 const ALL_WIDGETS = ["b-eng", "b-att", "b-spd", "b-alt", "r-spd", "r-alt", "s-spd", "s-eng", "s-att", "s-g"];
 let curMode = "";
 let launched = false;
@@ -1501,8 +1507,8 @@ function render(){
   } else if (sOK){
     // Ускоритель отработал и молчит — слева идут данные корабля.
     const sspd = lerp(S,"spd") * 3.6, salt = Math.max(0, lerp(S,"alt") / 1000);
-    setGauge(gBspd, sspd, sspd / 28000, 0, takeSweep("b-spd"));
-    setGauge(gBalt, salt, salt / 200, 1, takeSweep("b-alt"));
+    setGauge(gBspd, sspd, sspd / SHIP_SPD_FULL_KMH, 0, takeSweep("b-spd"));
+    setGauge(gBalt, salt, salt / SHIP_ALT_FULL_KM, 1, takeSweep("b-alt"));
     setGauge(gRspd, null, 0, 0); setGauge(gRalt, null, 0, 1);
     paintLit(bLit, 0); setFuel(bRing, 0);
   } else {
@@ -1513,7 +1519,7 @@ function render(){
 
   if (sOK){
     const spd = lerp(S,"spd") * 3.6;
-    setGauge(gSspd, spd, spd / 28000, 0, takeSweep("s-spd"));
+    setGauge(gSspd, spd, spd / SHIP_SPD_FULL_KMH, 0, takeSweep("s-spd"));
     const eSL = S.next.engsl, eVac = S.next.engvac;
     if (eSL !== undefined || eVac !== undefined)
       paintShipEngines(sRing, Math.round(eSL ?? 0), Math.round(eVac ?? 0), S.next.engmask);
